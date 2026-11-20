@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Areena</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><circle cx='5' cy='5' r='4' fill='%23e6194b'/></svg>">
+<style>
+  html, body { margin: 0; height: 100%; background: #0e1014; color: #eee; font-family: system-ui, sans-serif; overflow: hidden; user-select: none; }
+  canvas { display: block; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #info { top: 10px; left: 12px; font-size: 14px; line-height: 1.5; }
+  #list { top: 10px; right: 12px; font-size: 14px; line-height: 1.6; text-align: right; }
+  #list .kd { display: inline-block; min-width: 46px; color: #ddd; font-variant-numeric: tabular-nums; }
+  #feed { top: 120px; right: 12px; font-size: 14px; line-height: 1.9; text-align: right; }
+  #feed div { background: rgba(0,0,0,.45); padding: 1px 8px; border-radius: 4px; margin-bottom: 3px; display: inline-block; }
+  /* Lipas oikeassa alakulmassa */
+  #ammo { right: 26px; bottom: 24px; display: none; text-align: right; color: #efe6cf; }
+  #ammo .box { background: rgba(42,38,34,.82); border: 3px solid #2a2622; border-radius: 8px; padding: 6px 14px 8px; min-width: 120px; }
+  #ammo .num { font: 700 46px Georgia, "Times New Roman", serif; line-height: 1; }
+  #ammo .max { font: 700 20px Georgia, serif; color: #b9ae94; margin-left: 4px; }
+  #ammo .name { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #b9ae94; margin-top: 2px; }
+  #ammo .bar { height: 5px; background: #3a3530; border-radius: 3px; margin-top: 5px; overflow: hidden; visibility: hidden; }
+  #ammo .bar i { display: block; height: 100%; width: 0; background: #efe6cf; }
+  #ammo.empty .num { color: #e2392c; }
+  #ammo.reloading .bar { visibility: visible; }
+
+  /* Vahinkonumerot */
+  .dmg { position: fixed; left: 0; top: 0; pointer-events: none; font: 800 24px system-ui, sans-serif; color: #ff3b30;
+         text-shadow: 0 0 3px #000, 0 2px 2px #000; transform: translate(-50%, -50%); white-space: nowrap; }
+
+  /* Tähtäin ( · ) */
+  #cross { left: 50%; top: 50%; width: 40px; height: 24px; margin: -12px 0 0 -20px; display: none; }
+  #cross path, #cross circle { transition: stroke .08s, fill .08s; }
+  #cross.hit .fg { stroke: #ff3b30; } #cross.hit circle.fg { fill: #ff3b30; }
+
+  /* Elämäplussa */
+  #health { left: 26px; bottom: 22px; width: 130px; height: 130px; display: none; }
+  #health.low { animation: pulse 0.9s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+  #hpnum { font: 700 34px Georgia, "Times New Roman", serif; }
+
+  #hurt { inset: 0; box-shadow: inset 0 0 160px 40px rgba(220,0,0,.75); opacity: 0; transition: opacity .35s; }
+  #dead { inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(90,0,0,.35); font-size: 30px; font-weight: 700; }
+  #dead small { font-size: 16px; font-weight: 400; margin-top: 8px; color: #eee; }
+
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8,10,14,.82); overflow-y: auto; }
+  .overlay > .card { margin: auto; }
+  .card { background: #1d2129; padding: 26px 30px; border-radius: 12px; width: min(580px, 92vw); box-shadow: 0 10px 40px #0009; }
+  .card h1 { margin: 0 0 6px; font-size: 28px; }
+  .card .sub { color: #99a; font-size: 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  label { display: block; font-size: 13px; color: #aab; margin: 10px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border-radius: 6px; border: 1px solid #3a4050; background: #12151b; color: #eee; }
+  .classes { display: flex; gap: 10px; margin-top: 4px; }
+  .cls { flex: 1; border: 2px solid #343a48; border-radius: 10px; padding: 10px; cursor: pointer; background: #161a21; }
+  .cls:hover { border-color: #56607a; }
+  .cls.sel { border-color: #e6194b; background: #24161b; }
+  .cls b { display: block; font-size: 17px; margin-bottom: 2px; }
+  .cls .hp { font-size: 13px; color: #efe6cf; margin-bottom: 6px; }
+  .cls small { color: #aab; font-size: 12px; line-height: 1.4; display: block; }
+  .bar { height: 5px; background: #2c3240; border-radius: 3px; margin: 3px 0 6px; }
+  .bar i { display: block; height: 100%; background: #e6194b; border-radius: 3px; }
+  button.big { margin-top: 18px; width: 100%; padding: 12px; font-size: 16px; font-weight: 600; border: 0; border-radius: 6px; background: #e6194b; color: #fff; cursor: pointer; }
+  button.big:hover { background: #f03a63; }
+  #msg { color: #f88; font-size: 14px; margin-top: 10px; min-height: 1em; }
+  .hint { font-size: 12px; color: #889; margin-top: 10px; line-height: 1.5; }
+  #pause .card { text-align: center; width: auto; cursor: pointer; }
+  #copy { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border: 0; border-radius: 6px; background: rgba(43,48,64,.8); color: #ddd; cursor: pointer; display: none; font-size: 13px; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="info" class="hud"></div>
+<div id="list" class="hud"></div>
+<div id="feed" class="hud"></div>
+<div id="ammo" class="hud"><div class="box"><span class="num" id="ammoNum">10</span><span class="max" id="ammoMax">/ 10</span>
+  <div class="name" id="ammoName">Pistooli</div><div class="bar"><i id="reloadBar"></i></div></div></div>
+<div id="hurt" class="hud"></div>
+
+<svg id="cross" class="hud" viewBox="0 0 40 24">
+  <g fill="none" stroke-linecap="round">
+    <path d="M10 2 Q2 12 10 22" stroke="#000" stroke-opacity=".6" stroke-width="4"/>
+    <path d="M30 2 Q38 12 30 22" stroke="#000" stroke-opacity=".6" stroke-width="4"/>
+    <path class="fg" d="M10 2 Q2 12 10 22" stroke="#fff" stroke-width="2"/>
+    <path class="fg" d="M30 2 Q38 12 30 22" stroke="#fff" stroke-width="2"/>
+  </g>
+  <circle cx="20" cy="12" r="2.6" fill="#000" fill-opacity=".6"/>
+  <circle class="fg" cx="20" cy="12" r="1.6" fill="#fff"/>
+</svg>
+
+<svg id="health" class="hud" viewBox="0 0 120 120">
+  <defs>
+    <clipPath id="plus"><path id="plusPath" d="M40 6 H80 V40 H114 V80 H80 V114 H40 V80 H6 V40 H40 Z"/></clipPath>
+    <linearGradient id="beige" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2e9d2"/><stop offset="1" stop-color="#c9bb96"/></linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2392c"/><stop offset="1" stop-color="#a5150d"/></linearGradient>
+  </defs>
+  <path d="M40 6 H80 V40 H114 V80 H80 V114 H40 V80 H6 V40 H40 Z" fill="#3a3530"/>
+  <rect id="hpfill" x="0" y="0" width="120" height="120" fill="url(#beige)" clip-path="url(#plus)"/>
+  <path id="hpoutline" d="M40 6 H80 V40 H114 V80 H80 V114 H40 V80 H6 V40 H40 Z" fill="none" stroke="#2a2622" stroke-width="7" stroke-linejoin="miter"/>
+  <text id="hpnum" x="60" y="72" text-anchor="middle" fill="#5a5247">250</text>
+</svg>
+
+<div id="dead" class="hud"><div id="deadText"></div><small id="deadTimer"></small></div>
+<button id="copy">Kopioi huoneen linkki</button>
+
+<div id="lobby" class="overlay">
+  <div class="card">
+    <h1>Areena</h1>
+    <div class="sub">Valitse hahmo ja liity huoneeseen. Samassa huoneessa olevat näkevät toisensa.</div>
+    <div class="row" style="align-items:center">
+      <div>
+        <label for="name">Nimesi</label><input id="name" maxlength="16" placeholder="esim. Totti">
+        <label for="room">Huone</label><input id="room" maxlength="16" placeholder="esim. testi">
+      </div>
+      <div id="preview" style="flex:0 0 190px; height:220px"></div>
+    </div>
+    <label>Hahmo</label>
+    <div class="classes" id="classes"></div>
+    <button class="big" id="join">Liity peliin</button>
+    <div id="msg"></div>
+    <div class="hint">Ohjaus: WASD liikkuu, välilyönti hyppää, hiiri kääntää katsetta, vasen hiiren painike ampuu, R lataa. Esc vapauttaa hiiren.</div>
+  </div>
+</div>
+
+<div id="pause" class="overlay" style="display:none">
+  <div class="card"><h1>Klikkaa pelataksesi</h1><div class="sub">Hiiri lukittuu peliin. Esc vapauttaa sen.</div></div>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+
+// ====== ASETUS: oman Cloudflare-palvelimesi osoite ======
+const PROD_SERVER = "wss://areena.pallopeli.workers.dev";
+const isLocal = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const SERVER = new URLSearchParams(location.search).get("server") || (isLocal ? "ws://localhost:8787" : PROD_SERVER);
+
+// ====== Hahmojen nimet ja kuvaukset ======
+// Pelin arvot (nopeus, hyppy, elämät...) tulevat palvelimelta liityttäessä.
+// Alla olevat luvut ovat vain valikkoa varten.
+const CLASSES = {
+  panssari: { name: "Jari",  desc: "160 cm ja jykevä. Hidas, mutta kestää eniten.", speed: 5.6, jump: 7.2, radius: 0.6, height: 1.6, hp: 300, stats: [0.45, 0.4] },
+  sotilas:  { name: "Juha",  desc: "195 cm, pömppömaha ja silmälasit. Tasapainoinen.", speed: 6.8, jump: 8.2, radius: 0.5, height: 1.95, hp: 250, stats: [0.65, 0.65] },
+  vikkela:  { name: "Jarmo", desc: "180 cm, hihaton paita. Nopea, mutta hauras.", speed: 8.3, jump: 9.6, radius: 0.42, height: 1.8, hp: 200, stats: [0.9, 1.0] },
+};
+let WEAPON = { name: "Pistooli", cooldownMs: 280, mag: 10, reloadMs: 1300, range: 120 }; // palvelin lähettää oikeat arvot
+
+const GRAVITY = 25;
+const STEP = 0.55;          // näin korkealle noustaan ilman hyppyä (portaat)
+const SEND_MS = 50;         // oma sijainti palvelimelle 20 krt/s
+const INTERP_DELAY = 100;   // muut pelaajat näytetään 100 ms viiveellä, sulavasti
+const SENS = 0.0022;        // hiiren herkkyys
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// ====== Lobby ======
+let chosenClass = "sotilas";
+try { chosenClass = localStorage.getItem("areena-hahmo") || chosenClass; } catch {}
+if (!CLASSES[chosenClass]) chosenClass = "sotilas";
+
+function renderClasses() {
+  const labels = ["Nopeus", "Hyppy"];
+  $("classes").innerHTML = Object.entries(CLASSES).map(([key, c]) => `
+    <div class="cls ${key === chosenClass ? "sel" : ""}" data-k="${key}">
+      <b>${c.name}</b>
+      <div class="hp">✚ ${c.hp} elämää</div>
+      ${c.stats.map((v, i) => `<small>${labels[i]}</small><div class="bar"><i style="width:${v * 100}%"></i></div>`).join("")}
+      <small>${c.desc}</small>
+    </div>`).join("");
+  for (const el of document.querySelectorAll(".cls")) el.onclick = () => { chosenClass = el.dataset.k; renderClasses(); };
+}
+renderClasses();
+
+const params = new URLSearchParams(location.search);
+$("room").value = params.get("room") || "";
+try { $("name").value = localStorage.getItem("pallopeli-nimi") || ""; } catch {}
+$("join").onclick = join;
+[$("name"), $("room")].forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") join(); }));
+
+// ====== Three.js-näkymä ======
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9cc4e4);
+scene.fog = new THREE.Fog(0x9cc4e4, 60, 170);
+
+const camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.05, 300);
+camera.rotation.order = "YXZ";
+scene.add(camera);
+
+scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a4a3a, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(25, 40, 15);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 70, bottom: -70, near: 1, far: 160 });
+scene.add(sun);
+
+// Kenttä rakennetaan, kun palvelin lähettää sen (liittyessä)
+let ARENA_X = 30, ARENA_Z = 60;
+let BOXES = [];
+let world = null;
+
+function buildWorld(map) {
+  if (world) { scene.remove(world); world.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); }
+  world = new THREE.Group();
+  ARENA_X = map.x; ARENA_Z = map.z;
+  BOXES = map.boxes.map(([minX, minY, minZ, maxX, maxY, maxZ, color]) => ({ minX, minY, minZ, maxX, maxY, maxZ, color }));
+
+  // Lattia ruudukolla
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  g.fillStyle = "#5d6b4f"; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = "#4c5841"; g.lineWidth = 4; g.strokeRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(ARENA_X, ARENA_Z);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_X * 2, ARENA_Z * 2), new THREE.MeshStandardMaterial({ map: tex }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  world.add(floor);
+
+  // Ulkoseinät
+  for (const [x, z, w, d] of [[0, -ARENA_Z - 0.5, ARENA_X * 2 + 2, 1], [0, ARENA_Z + 0.5, ARENA_X * 2 + 2, 1], [-ARENA_X - 0.5, 0, 1, ARENA_Z * 2], [ARENA_X + 0.5, 0, 1, ARENA_Z * 2]]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 4, d), new THREE.MeshStandardMaterial({ color: 0x3b4252 }));
+    wall.position.set(x, 2, z);
+    wall.receiveShadow = true;
+    world.add(wall);
+  }
+
+  // Laatikot, seinät, tornit
+  for (const b of BOXES) {
+    const w = b.maxX - b.minX, h = b.maxY - b.minY, d = b.maxZ - b.minZ;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: b.color }));
+    mesh.position.set((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, (b.minZ + b.maxZ) / 2);
+    mesh.castShadow = mesh.receiveShadow = true;
+    world.add(mesh);
+  }
+  scene.add(world);
+}
+
+// ====== Oma ase (näkyy ruudun oikeassa alakulmassa) ======
+const gunMat = new THREE.MeshStandardMaterial({ color: 0x2a2d33, metalness: 0.3, roughness: 0.6 });
+const gripMat = new THREE.MeshStandardMaterial({ color: 0x5b3a1f });
+const viewGun = new THREE.Group();
+{
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.32), gunMat);
+  slide.position.set(0, 0.03, -0.1);
+  const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.06), gunMat);
+  barrel.position.set(0, 0.035, -0.28);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.08), gripMat);
+  grip.position.set(0, -0.06, 0.02);
+  grip.rotation.x = -0.25;
+  viewGun.add(slide, barrel, grip);
+}
+const GUN_POS = new THREE.Vector3(0.22, -0.2, -0.42);
+viewGun.position.copy(GUN_POS);
+viewGun.visible = false;
+camera.add(viewGun);
+
+// Vasen käsi, joka tulee lataamaan aseen
+const viewHand = new THREE.Group();
+{
+  const skin = new THREE.MeshStandardMaterial({ color: 0xe2b08c });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x555a63 });
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.1), skin);
+  const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.22, 4, 10), sleeve);
+  fore.rotation.x = Math.PI / 2.4;
+  fore.position.set(-0.02, -0.06, 0.14);
+  const mag = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.1, 0.06), new THREE.MeshStandardMaterial({ color: 0x1b1d21 }));
+  mag.position.set(0, 0.06, -0.01);
+  viewHand.add(palm, fore, mag);
+  viewHand.userData.mag = mag;
+}
+const HAND_REST = new THREE.Vector3(-0.3, -0.6, -0.35);   // piilossa ruudun alla vasemmalla
+const HAND_GUN = new THREE.Vector3(0.2, -0.36, -0.4);     // aseen kahvan alla
+viewHand.position.copy(HAND_REST);
+viewHand.visible = false;
+camera.add(viewHand);
+
+const flashMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 });
+const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flashMat);
+muzzle.position.set(0, 0.035, -0.34);
+muzzle.visible = false;
+viewGun.add(muzzle);
+
+// ====== Hahmot: Jari, Juha ja Jarmo ======
+// Jokainen hahmo kuvataan "luurankona": nivelet (lantio, olkapäät, niska) ja niihin
+// kiinnitetyt muodot. Mitat metreinä, jalat maassa (y = 0), kasvot kohti -z.
+const SKIN = 0xe2b08c, SKIN_DARK = 0xc98f6b, EYE = 0x1d1d1f;
+
+function charSpec(kind, shirt) {
+  // Hahmokohtaiset mitat
+  const P = {
+    panssari: { // Jari: 160 cm, lihava, iso pää, kaksoisleuka, tummanharmaat hiukset
+      legLen: 0.62, legR: 0.13, hipX: 0.18, pants: 0x3a3d44,
+      torso: { t: "sphere", r: 0.5, s: [1.0, 0.76, 0.84], y: 0.32 },
+      belly: { r: 0.36, y: 0.16, z: -0.2 },
+      shoulderY: 0.6, shoulderX: 0.47, armLen: 0.54, armR: 0.115, sleeve: 0.5, armOut: 0.32,
+      headY: 0.76, headR: 0.245, hair: 0x4a4a4c, chin: 2,
+    },
+    sotilas: { // Juha: 195 cm, pömppömaha, kalju, silmälasit
+      legLen: 0.95, legR: 0.1, hipX: 0.13, pants: 0x2f3b55,
+      torso: { t: "capsule", r: 0.26, l: 0.2, s: [1.18, 1, 0.92], y: 0.34 },
+      belly: { r: 0.27, y: 0.17, z: -0.16 },
+      shoulderY: 0.6, shoulderX: 0.34, armLen: 0.68, armR: 0.085, sleeve: 0.4, armOut: 0.12,
+      headY: 0.84, headR: 0.155, glasses: true,
+    },
+    vikkela: { // Jarmo: 180 cm, hihaton paita, hieman ylipainoa, tummanruskeat hiukset
+      legLen: 0.86, legR: 0.1, hipX: 0.13, pants: 0x4b4237,
+      torso: { t: "capsule", r: 0.25, l: 0.2, s: [1.12, 1, 0.95], y: 0.33 },
+      belly: { r: 0.2, y: 0.13, z: -0.1 },
+      shoulderY: 0.61, shoulderX: 0.32, armLen: 0.64, armR: 0.085, sleeve: 0, armOut: 0.1, tank: true,
+      headY: 0.785, headR: 0.15, hair: 0x3a2414,
+    },
+  }[kind] || null;
+  if (!P) return charSpec("sotilas", shirt);
+
+  const leg = (s) => ({
+    name: s < 0 ? "legL" : "legR", p: [s * P.hipX, P.legLen, 0], c: [
+      { p: [0, -(P.legLen - 0.06) / 2, 0], m: { t: "capsule", r: P.legR, l: Math.max(0.02, P.legLen - 0.06 - 2 * P.legR), col: P.pants } },
+      { p: [0, -P.legLen + 0.04, -0.05], m: { t: "box", w: P.legR * 1.7, h: 0.08, d: P.legR * 2.6 + 0.08, col: 0x2a211b } },
+    ],
+  });
+
+  // Käsivarsi: olkapäästä alaspäin. Hihan osuus paidan väriä, loput ihoa.
+  const arm = (s) => {
+    const upper = P.armLen * 0.5, lower = P.armLen * 0.5;
+    const kids = [
+      { p: [0, -upper / 2, 0], m: { t: "capsule", r: P.armR, l: Math.max(0.02, upper - P.armR), col: P.sleeve > 0 ? shirt : SKIN } },
+      { p: [0, -upper - lower / 2, 0], m: { t: "capsule", r: P.armR * 0.9, l: Math.max(0.02, lower - P.armR), col: P.sleeve > 0.55 ? shirt : SKIN } },
+      { name: s > 0 ? "handR" : "handL", p: [0, -P.armLen, 0], m: { t: "sphere", r: P.armR * 1.05, col: SKIN } },
+    ];
+    if (s > 0) { // ase oikeassa kädessä, piippu käden suuntaan
+      kids.push({ p: [0, -P.armLen - 0.1, -0.05], m: { t: "box", w: 0.06, h: 0.24, d: 0.09, col: 0x23262b } });
+    }
+    return { name: s < 0 ? "armL" : "armR", p: [s * P.shoulderX, P.shoulderY, 0], r: [0, 0, s * P.armOut], c: kids };
+  };
+
+  const head = { name: "head", p: [0, P.headY, 0], c: [
+    { m: { t: "sphere", r: P.headR, s: [1, 1.05, 1], col: SKIN } },
+    // silmät ja nenä
+    { p: [-P.headR * 0.38, P.headR * 0.18, -P.headR * 0.9], m: { t: "sphere", r: P.headR * 0.11, col: EYE } },
+    { p: [P.headR * 0.38, P.headR * 0.18, -P.headR * 0.9], m: { t: "sphere", r: P.headR * 0.11, col: EYE } },
+    { p: [0, -P.headR * 0.08, -P.headR * 1.0], m: { t: "sphere", r: P.headR * 0.17, s: [1, 1.1, 1], col: SKIN_DARK } },
+    // korvat
+    { p: [-P.headR * 0.98, 0, 0.01], m: { t: "sphere", r: P.headR * 0.2, s: [0.6, 1, 1], col: SKIN_DARK } },
+    { p: [P.headR * 0.98, 0, 0.01], m: { t: "sphere", r: P.headR * 0.2, s: [0.6, 1, 1], col: SKIN_DARK } },
+  ] };
+  if (P.hair) { // hiukset: kupoli päälaella, kallistettu taaksepäin
+    head.c.push({ p: [0, P.headR * 0.08, P.headR * 0.06], r: [0.4, 0, 0], m: { t: "sphere", r: P.headR * 1.07, cap: 0.5, col: P.hair } });
+  }
+  if (P.chin === 2) { // kaksoisleuka
+    head.c.push({ p: [0, -P.headR * 0.78, -P.headR * 0.35], m: { t: "sphere", r: P.headR * 0.62, s: [1.25, 0.55, 1], col: SKIN } });
+    head.c.push({ p: [0, -P.headR * 1.08, -P.headR * 0.12], m: { t: "sphere", r: P.headR * 0.62, s: [1.35, 0.5, 1.05], col: SKIN } });
+  }
+  if (P.glasses) { // silmälasit
+    for (const s of [-1, 1]) {
+      head.c.push({ p: [s * P.headR * 0.38, P.headR * 0.18, -P.headR * 0.98], m: { t: "torus", r: P.headR * 0.24, tube: 0.008, col: 0x111111 } });
+      head.c.push({ p: [s * P.headR * 0.8, P.headR * 0.18, -P.headR * 0.5], m: { t: "box", w: 0.008, h: 0.008, d: P.headR * 0.95, col: 0x111111 } });
+    }
+    head.c.push({ p: [0, P.headR * 0.2, -P.headR * 1.0], m: { t: "box", w: P.headR * 0.28, h: 0.008, d: 0.008, col: 0x111111 } });
+  }
+
+  const T = P.torso;
+  const body = { name: "body", p: [0, P.legLen, 0], c: [
+    { p: [0, T.y, 0], m: T.t === "sphere" ? { t: "sphere", r: T.r, s: T.s, col: shirt } : { t: "capsule", r: T.r, l: T.l, s: T.s, col: shirt } },
+    { p: [0, P.belly.y, P.belly.z], m: { t: "sphere", r: P.belly.r, s: [1.05, 0.95, 1], col: shirt } },
+    // vyö
+    { p: [0, 0.03, 0], m: { t: "cyl", r1: P.hipX + P.legR + 0.03, r2: P.hipX + P.legR + 0.03, h: 0.07, col: 0x2a211b } },
+    // kaula
+    { p: [0, (P.shoulderY + P.headY) / 2 - 0.04, 0], m: { t: "cyl", r1: P.headR * 0.5, r2: P.headR * 0.55, h: 0.12, col: SKIN } },
+    arm(-1), arm(1), head,
+  ] };
+  if (P.tank) { // hihattoman paidan olkaimet
+    for (const s of [-1, 1]) body.c.push({ p: [s * P.shoulderX * 0.62, P.shoulderY + 0.02, 0], m: { t: "box", w: 0.07, h: 0.06, d: 0.26, col: shirt } });
+  }
+  return { c: [leg(-1), leg(1), body] };
+}
+
+const _matCache = new Map();
+function mat(col) {
+  if (!_matCache.has(col)) _matCache.set(col, new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 }));
+  return _matCache.get(col);
+}
+function buildNode(spec, parts) {
+  const g = new THREE.Group();
+  if (spec.p) g.position.set(...spec.p);
+  if (spec.r) g.rotation.set(...spec.r);
+  if (spec.name) parts[spec.name] = g;
+  const m = spec.m;
+  if (m) {
+    let geo;
+    if (m.t === "sphere") geo = m.cap ? new THREE.SphereGeometry(m.r, 20, 12, 0, Math.PI * 2, 0, Math.PI * m.cap) : new THREE.SphereGeometry(m.r, 20, 14);
+    else if (m.t === "capsule") geo = new THREE.CapsuleGeometry(m.r, m.l, 6, 14);
+    else if (m.t === "box") geo = new THREE.BoxGeometry(m.w, m.h, m.d);
+    else if (m.t === "cyl") geo = new THREE.CylinderGeometry(m.r1, m.r2, m.h, 16);
+    else if (m.t === "torus") geo = new THREE.TorusGeometry(m.r, m.tube, 6, 18);
+    const mesh = new THREE.Mesh(geo, mat(m.col));
+    if (m.s) mesh.scale.set(...m.s);
+    mesh.castShadow = true;
+    g.add(mesh);
+  }
+  for (const child of spec.c || []) g.add(buildNode(child, parts));
+  return g;
+}
+
+function buildCharacter(kind, color) {
+  const parts = {};
+  const root = buildNode(charSpec(kind, new THREE.Color(color).getHex()), parts);
+  // Lähtöasennot animaatiota varten
+  parts.base = { bodyY: parts.body.position.y, armLz: parts.armL.rotation.z, armRz: parts.armR.rotation.z };
+  return { root, parts, phase: 0, speed: 0, deadT: 0, last: null };
+}
+
+// Animaatio: kävely nopeuden mukaan, hyppy, tähtäys ja kaatuminen
+function animateCharacter(ch, kind, state, dt, now) {
+  const c = CLASSES[kind] || CLASSES.sotilas;
+  const { parts } = ch;
+  const last = ch.last || state;
+  const vx = (state.x - last.x) / Math.max(dt, 1e-3), vz = (state.z - last.z) / Math.max(dt, 1e-3), vy = (state.y - last.y) / Math.max(dt, 1e-3);
+  ch.last = { x: state.x, y: state.y, z: state.z };
+  const horiz = Math.min(Math.hypot(vx, vz), c.speed * 1.5);
+  ch.speed += (horiz - ch.speed) * Math.min(1, dt * 10); // pehmennys
+  const inAir = Math.abs(vy) > 0.8;
+
+  // Kaatuminen
+  if (!state.alive) {
+    ch.deadT += dt;
+    ch.root.rotation.x = Math.min(1, ch.deadT * 3.5) * (Math.PI / 2);
+    return;
+  }
+  ch.deadT = 0;
+  ch.root.rotation.x = 0;
+
+  const legLen = parts.base.bodyY;
+  const heavy = kind === "panssari";
+  const stride = legLen * (heavy ? 1.0 : 1.3);
+  ch.phase += (ch.speed / stride) * dt * Math.PI;
+  const amp = Math.min(1, ch.speed / (c.speed * 0.6)) * (kind === "vikkela" ? 0.75 : heavy ? 0.5 : 0.6);
+  const sw = Math.sin(ch.phase);
+
+  if (inAir) {
+    parts.legL.rotation.x = 0.55; parts.legR.rotation.x = -0.25;
+    parts.armL.rotation.x = -0.6;
+  } else {
+    parts.legL.rotation.x = sw * amp;
+    parts.legR.rotation.x = -sw * amp;
+    parts.armL.rotation.x = -sw * amp * 0.9;
+  }
+  // Lataus: vasen käsi tuo uuden lippaan aseeseen
+  if (state.reloading) {
+    parts.armL.rotation.x = 1.15 + state.pitch * 0.8 + Math.sin(now / 90) * 0.12;
+    parts.armL.rotation.z = 0.65;
+  } else {
+    parts.armL.rotation.z = parts.base.armLz;
+  }
+  // Oikea käsi tähtää katseen suuntaan
+  parts.armR.rotation.x = Math.PI / 2 + state.pitch;
+  parts.armR.rotation.z = parts.base.armRz * 0.3;
+  parts.head.rotation.x = state.pitch * 0.45;
+
+  // Vartalo: pomppii askelissa, Jari keinuu sivuttain, levossa hengitys
+  const breathe = Math.sin(now / 600) * 0.012;
+  parts.body.position.y = parts.base.bodyY + Math.abs(sw) * 0.035 * amp;
+  parts.body.rotation.z = heavy ? sw * 0.09 * amp : sw * 0.03 * amp;
+  parts.body.rotation.x = -ch.speed / c.speed * (kind === "vikkela" ? 0.12 : 0.05); // nojaus eteenpäin juostessa
+  parts.body.scale.set(1 + breathe * 0.5, 1 + breathe, 1 + breathe * 0.5);
+}
+
+// ====== Toisen pelaajan hahmo ======
+function makeAvatar(p) {
+  const c = CLASSES[p.k] || CLASSES.sotilas;
+  const ch = buildCharacter(p.k, p.c);
+  const group = new THREE.Group();
+  group.add(ch.root);
+
+  // Nimi pään yläpuolelle
+  const cv = document.createElement("canvas");
+  cv.width = 256; cv.height = 64;
+  const g = cv.getContext("2d");
+  g.font = "bold 34px system-ui, sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineWidth = 6; g.strokeStyle = "rgba(0,0,0,.7)"; g.strokeText(p.n, 128, 32);
+  g.fillStyle = "#fff"; g.fillText(p.n, 128, 32);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthWrite: false }));
+  label.scale.set(1.6, 0.4, 1);
+  label.position.y = c.height + 0.35;
+  group.add(label);
+
+  scene.add(group);
+  return { group, ch, label, k: p.k, n: p.n };
+}
+
+function removeAvatar(av) {
+  scene.remove(av.group);
+  av.label.material.map.dispose();
+  av.label.material.dispose();
+  av.group.traverse((o) => o.geometry?.dispose?.()); // materiaalit jaetaan hahmojen kesken
+}
+
+// ====== Hahmon esikatselu valikossa ======
+const preview = (() => {
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  r.setPixelRatio(Math.min(devicePixelRatio, 2));
+  r.setSize(190, 220);
+  $("preview").appendChild(r.domElement);
+  const s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xffffff, 0x555544, 1.3));
+  const l = new THREE.DirectionalLight(0xffffff, 1.4);
+  l.position.set(2, 3, -3);
+  s.add(l);
+  const cam = new THREE.PerspectiveCamera(35, 190 / 220, 0.1, 20);
+  cam.position.set(0, 1.15, -4.4);
+  cam.lookAt(0, 0.95, 0);
+  return { renderer: r, scene: s, camera: cam, ch: null, kind: null };
+})();
+function previewFrame(dt, now) {
+  if (preview.kind !== chosenClass) {
+    if (preview.ch) preview.scene.remove(preview.ch.root);
+    preview.kind = chosenClass;
+    preview.ch = buildCharacter(chosenClass, "#e6194b");
+    preview.scene.add(preview.ch.root);
+  }
+  // kävelee paikallaan ja pyörii hitaasti
+  const c = CLASSES[chosenClass];
+  const fake = { x: preview.ch.last ? preview.ch.last.x + c.speed * 0.6 * dt : 0, y: 0, z: 0, pitch: -0.15, alive: true };
+  animateCharacter(preview.ch, chosenClass, fake, dt, now);
+  preview.ch.root.position.x = 0;
+  preview.ch.root.rotation.y = now / 1600;
+  preview.renderer.render(preview.scene, preview.camera);
+}
+
+// ====== Laukausten jäljet ======
+const tracers = [];
+function addTracer(from, to, color = 0xfff2b0) {
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...to)]);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+  scene.add(line);
+  tracers.push({ line, born: performance.now() });
+}
+function updateTracers(now) {
+  for (let i = tracers.length - 1; i >= 0; i--) {
+    const t = tracers[i], age = now - t.born;
+    t.line.material.opacity = Math.max(0, 0.9 - age / 120);
+    if (age > 120) { scene.remove(t.line); t.line.geometry.dispose(); t.line.material.dispose(); tracers.splice(i, 1); }
+  }
+}
+
+// ====== Äänet (pienet syntetisoidut äänet, ei tiedostoja) ======
+let audio = null;
+function sound(kind) {
+  try {
+    audio = audio || new AudioContext();
+    const t = audio.currentTime;
+    if (kind === "magOut" || kind === "magIn" || kind === "rack") {
+      // Latauksen äänet: lyhyitä metallisia napsahduksia
+      const len = kind === "rack" ? 0.16 : 0.07;
+      const buf = audio.createBuffer(1, audio.sampleRate * len, audio.sampleRate), data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const e = Math.pow(1 - i / data.length, kind === "rack" ? 1.5 : 4);
+        data[i] = (Math.random() * 2 - 1) * e * (kind === "rack" && i > data.length * 0.45 && i < data.length * 0.55 ? 2 : 1);
+      }
+      const src = audio.createBufferSource(), f = audio.createBiquadFilter(), gn = audio.createGain();
+      src.buffer = buf; f.type = "bandpass";
+      f.frequency.value = kind === "magOut" ? 1800 : kind === "magIn" ? 2600 : 3400; f.Q.value = 3;
+      gn.gain.value = kind === "magIn" ? 0.6 : 0.45;
+      src.connect(f).connect(gn).connect(audio.destination); src.start(t);
+    } else if (kind === "shot") {
+      const len = 0.12, buf = audio.createBuffer(1, audio.sampleRate * len, audio.sampleRate), data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3);
+      const src = audio.createBufferSource(), f = audio.createBiquadFilter(), gn = audio.createGain();
+      src.buffer = buf; f.type = "lowpass"; f.frequency.value = 2200; gn.gain.value = 0.35;
+      src.connect(f).connect(gn).connect(audio.destination); src.start(t);
+    } else {
+      const o = audio.createOscillator(), gn = audio.createGain();
+      o.type = kind === "hurt" ? "sawtooth" : "square";
+      o.frequency.value = kind === "kill" ? 1320 : kind === "hurt" ? 140 : 880;
+      gn.gain.setValueAtTime(kind === "hurt" ? 0.12 : 0.07, t);
+      gn.gain.exponentialRampToValueAtTime(0.001, t + (kind === "kill" ? 0.25 : 0.09));
+      o.connect(gn).connect(audio.destination); o.start(t); o.stop(t + 0.3);
+    }
+  } catch {}
+}
+
+// ====== Oma pelaaja ja fysiikka ======
+const me = { x: 0, y: 0, z: 0, vy: 0, yaw: 0, pitch: 0, grounded: true, cls: CLASSES.sotilas, hp: 250, alive: true };
+const keys = {};
+let jumpQueued = false; // lyhytkin välilyönnin napautus hyppää
+
+function overlapsXZ(x, z, b, r) {
+  return x + r > b.minX && x - r < b.maxX && z + r > b.minZ && z - r < b.maxZ;
+}
+function overlaps(x, y, z, b, r, h) {
+  return overlapsXZ(x, z, b, r) && y < b.maxY && y + h > b.minY;
+}
+
+// Liikutetaan yhtä akselia kerrallaan ja työnnetään pois laatikoista
+function moveAxis(axis, delta) {
+  const r = me.cls.radius, h = me.cls.height;
+  me[axis] += delta;
+  for (const b of BOXES) {
+    if (!overlaps(me.x, me.y, me.z, b, r, h)) continue;
+    // Matala este (porras): noustaan sen päälle, jos yläpuolella on tilaa
+    if (b.maxY - me.y <= STEP && me.grounded && !BOXES.some((o) => o !== b && overlaps(me.x, b.maxY, me.z, o, r, h))) {
+      me.y = b.maxY;
+      continue;
+    }
+    if (axis === "x") me.x = delta > 0 ? b.minX - r - 1e-4 : b.maxX + r + 1e-4;
+    else me.z = delta > 0 ? b.minZ - r - 1e-4 : b.maxZ + r + 1e-4;
+  }
+  const lim = (axis === "x" ? ARENA_X : ARENA_Z) - r;
+  me[axis] = Math.max(-lim, Math.min(lim, me[axis]));
+}
+
+function physics(dt) {
+  const c = me.cls;
+  let f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  let s = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  const len = Math.hypot(f, s) || 1;
+  f /= len; s /= len;
+  const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
+  moveAxis("x", (-sin * f + cos * s) * c.speed * dt);
+  moveAxis("z", (-cos * f - sin * s) * c.speed * dt);
+
+  if ((keys.Space || jumpQueued) && me.grounded) { me.vy = c.jump; me.grounded = false; }
+  jumpQueued = false;
+  me.vy -= GRAVITY * dt;
+  const newY = me.y + me.vy * dt;
+  me.grounded = false;
+  // Alla oleva lattia ja yllä oleva katto
+  let ground = 0, ceiling = Infinity;
+  for (const b of BOXES) {
+    if (!overlapsXZ(me.x, me.z, b, c.radius)) continue;
+    if (me.y >= b.maxY - 1e-3) ground = Math.max(ground, b.maxY);
+    else if (me.y + c.height <= b.minY + 1e-3) ceiling = Math.min(ceiling, b.minY);
+  }
+  if (newY <= ground) { me.y = ground; me.vy = 0; me.grounded = true; }
+  else if (newY + c.height > ceiling) { me.y = ceiling - c.height; me.vy = 0; }
+  else me.y = newY;
+}
+
+// Säde vs. laatikko (sama kuin palvelimella)
+function rayBox(o, d, min, max) {
+  let tmin = 0, tmax = Infinity;
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(d[i]) < 1e-9) { if (o[i] < min[i] || o[i] > max[i]) return null; }
+    else {
+      let t1 = (min[i] - o[i]) / d[i], t2 = (max[i] - o[i]) / d[i];
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmin > tmax) return null;
+    }
+  }
+  return tmin;
+}
+
+// ====== Hiiri ja näppäimet ======
+const canvas = renderer.domElement;
+let joined = false, firing = false;
+function locked() { return document.pointerLockElement === canvas; }
+$("pause").onclick = () => canvas.requestPointerLock();
+canvas.addEventListener("click", () => { if (joined && !locked()) canvas.requestPointerLock(); });
+document.addEventListener("pointerlockchange", updateOverlays);
+document.addEventListener("mousemove", (e) => {
+  if (!locked()) return;
+  me.yaw -= e.movementX * SENS;
+  me.pitch = Math.max(-1.55, Math.min(1.55, me.pitch - e.movementY * SENS));
+});
+document.addEventListener("mousedown", (e) => { if (e.button === 0 && locked()) firing = true; });
+document.addEventListener("mouseup", (e) => { if (e.button === 0) firing = false; });
+addEventListener("keydown", (e) => {
+  if (!joined) return;
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (e.code === "Space") jumpQueued = true;
+  if (e.code === "KeyR" && me.alive) startReload(true);
+});
+addEventListener("keyup", (e) => { keys[e.code] = false; });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; firing = false; });
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function updateOverlays() {
+  const playing = joined && locked();
+  $("pause").style.display = joined && !locked() && me.alive ? "flex" : "none";
+  $("cross").style.display = playing && me.alive ? "block" : "none";
+  $("health").style.display = joined ? "block" : "none";
+  $("ammo").style.display = joined ? "block" : "none";
+  viewGun.visible = joined && me.alive;
+  if (!locked()) { for (const k in keys) keys[k] = false; firing = false; }
+}
+
+// ====== Elämäplussa ======
+function updateHealth() {
+  const max = me.cls.hp || 1;
+  const hp = Math.max(0, me.hp);
+  const frac = Math.min(1, hp / max);
+  const low = hp < 50;
+  // Täyttö laskee alhaalta ylöspäin elämien mukaan (plussa ulottuu y = 6...114)
+  const top = 114 - 108 * frac;
+  const fill = $("hpfill");
+  fill.setAttribute("y", top);
+  fill.setAttribute("height", 120 - top);
+  fill.setAttribute("fill", low ? "url(#red)" : "url(#beige)");
+  $("hpoutline").setAttribute("stroke", low ? "#7a0d08" : "#2a2622");
+  $("hpnum").textContent = Math.ceil(hp);
+  // Numero tummana täytön päällä, vaaleana tyhjän päällä
+  const textOnFill = top < 50;
+  $("hpnum").setAttribute("fill", low ? "#fbe9e4" : textOnFill ? "#5a5247" : "#efe6cf");
+  $("health").classList.toggle("low", low && me.alive);
+}
+
+// ====== Verkko ======
+let ws = null, myId = null, roomName = "";
+let snapshots = [];
+const avatars = new Map();
+let lastView = { players: new Map(), sa: 0, sb: 0, t: 1 };
+let respawnAt = 0;
+
+function join() {
+  const name = $("name").value.trim() || "Pelaaja";
+  roomName = ($("room").value.trim() || "aula").toLowerCase();
+  try { localStorage.setItem("pallopeli-nimi", name); localStorage.setItem("areena-hahmo", chosenClass); } catch {}
+  const u = new URL(location.href);
+  u.searchParams.set("room", roomName);
+  history.replaceState(null, "", u);
+
+  $("msg").textContent = "Yhdistetään…";
+  snapshots = [];
+  ws = new WebSocket(`${SERVER}/ws?room=${encodeURIComponent(roomName)}&name=${encodeURIComponent(name)}&cls=${chosenClass}`);
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    switch (msg.type) {
+      case "welcome":
+        myId = msg.id;
+        for (const k in msg.classes) Object.assign(CLASSES[k] ||= { name: k, desc: "", stats: [0.5, 0.5] }, msg.classes[k]);
+        WEAPON = msg.weapon;
+        buildWorld(msg.map);
+        me.cls = CLASSES[chosenClass];
+        Object.assign(me, msg.spawn, { vy: 0, pitch: 0, grounded: true, hp: me.cls.hp, alive: true });
+        resetAmmo();
+        joined = true;
+        $("msg").textContent = "";
+        $("lobby").style.display = "none";
+        $("copy").style.display = "block";
+        canvas.requestPointerLock?.();
+        updateOverlays(); updateHealth();
+        break;
+      case "state":
+        snapshots.push({ time: performance.now(), seq: msg.seq, players: new Map(msg.players.map((p) => [p.id, p])) });
+        if (snapshots.length > 30) snapshots.shift();
+        { const mine = msg.players.find((p) => p.id === myId); if (mine && mine.a) { me.hp = mine.h; updateHealth(); } }
+        break;
+      case "correct":
+        Object.assign(me, { x: msg.x, y: msg.y, z: msg.z, vy: 0 });
+        break;
+      case "shot": {
+        // Toisen pelaajan laukaus: jälki aseen kohdalta osumakohtaan
+        const o = [msg.o[0], msg.o[1] - 0.3, msg.o[2]];
+        addTracer(o, msg.e);
+        break;
+      }
+      case "hit":
+        if (msg.at) addDamageNumber(msg.dmg, msg.at);
+        flashCross(msg.kill);
+        sound(msg.kill ? "kill" : "hit");
+        break;
+      case "hurt":
+        me.hp = Math.max(0, me.hp - msg.dmg);
+        updateHealth();
+        $("hurt").style.transition = "none"; $("hurt").style.opacity = 1;
+        requestAnimationFrame(() => { $("hurt").style.transition = "opacity .5s"; $("hurt").style.opacity = 0; });
+        sound("hurt");
+        break;
+      case "kill":
+        addFeed(msg);
+        if (msg.victimId === myId) {
+          me.alive = false; me.hp = 0; firing = false;
+          resetAmmo();
+          respawnAt = performance.now() + 3000;
+          $("deadText").innerHTML = `<span style="color:${msg.kc}">${esc(msg.killer)}</span> tyrmäsi sinut`;
+          $("dead").style.display = "flex";
+          updateOverlays(); updateHealth();
+        }
+        break;
+      case "respawn":
+        Object.assign(me, msg.spawn, { vy: 0, pitch: 0, grounded: true, hp: msg.hp, alive: true });
+        resetAmmo();
+        $("dead").style.display = "none";
+        updateOverlays(); updateHealth();
+        break;
+      case "full":
+        $("msg").textContent = "Huone on täynnä. Kokeile toista huonetta.";
+        break;
+    }
+  };
+
+  ws.onclose = () => {
+    if (joined) $("msg").textContent = "Yhteys katkesi. Liity uudelleen.";
+    else if ($("msg").textContent === "Yhdistetään…") $("msg").textContent = "Palvelimeen ei saatu yhteyttä (" + SERVER + ").";
+    joined = false; myId = null;
+    $("lobby").style.display = "flex";
+    $("dead").style.display = "none";
+    $("copy").style.display = "none";
+    document.exitPointerLock?.();
+    for (const av of avatars.values()) removeAvatar(av);
+    avatars.clear();
+    updateOverlays();
+  };
+}
+
+let lastSend = 0, lastSent = "";
+function sendMove(now) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !me.alive || now - lastSend < SEND_MS) return;
+  lastSend = now;
+  const msg = JSON.stringify({ type: "move", x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3) });
+  if (msg !== lastSent) { ws.send(msg); lastSent = msg; } // paikallaan seistessä ei lähetetä mitään
+}
+
+// ====== Ampuminen ======
+let lastShot = 0, recoil = 0;
+let ammo = 10, reloading = false, reloadStart = 0, reloadSounds = [];
+function resetAmmo() {
+  ammo = WEAPON.mag; reloading = false;
+  reloadSounds.forEach(clearTimeout); reloadSounds = [];
+  updateAmmo(0);
+}
+function startReload(manual) {
+  if (reloading || ammo >= WEAPON.mag || !joined) return;
+  reloading = true;
+  reloadStart = performance.now();
+  if (manual && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "reload" }));
+  // Äänet animaation tahdissa: lipas ulos, uusi lipas sisään, luisti taakse
+  const R = WEAPON.reloadMs;
+  reloadSounds = [setTimeout(() => sound("magOut"), R * 0.15), setTimeout(() => sound("magIn"), R * 0.55), setTimeout(() => sound("rack"), R * 0.82)];
+  updateAmmo(performance.now());
+}
+function updateAmmo(now) {
+  if (reloading && now - reloadStart >= WEAPON.reloadMs) { reloading = false; ammo = WEAPON.mag; }
+  $("ammoNum").textContent = ammo;
+  $("ammoMax").textContent = "/ " + WEAPON.mag;
+  $("ammoName").textContent = reloading ? "Ladataan…" : WEAPON.name;
+  $("ammo").classList.toggle("empty", ammo === 0);
+  $("ammo").classList.toggle("reloading", reloading);
+  $("reloadBar").style.width = reloading ? Math.min(100, ((now - reloadStart) / WEAPON.reloadMs) * 100) + "%" : "0";
+}
+function eyePos() { return [me.x, me.y + me.cls.height * 0.9, me.z]; }
+function aimDir() {
+  const cp = Math.cos(me.pitch);
+  return [-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp];
+}
+
+function shoot(now) {
+  if (reloading || ammo <= 0) return;
+  lastShot = now;
+  ammo--;
+  const o = eyePos(), d = aimDir();
+  ws.send(JSON.stringify({
+    type: "shoot",
+    o: o.map((v) => +v.toFixed(3)), d: d.map((v) => +v.toFixed(4)),
+    sa: lastView.sa, sb: lastView.sb, t: +lastView.t.toFixed(3), // mitä näin ruudulla
+  }));
+
+  // Oma jälki heti (osumat ratkaisee palvelin)
+  let dist = WEAPON.range;
+  for (const b of BOXES) { const t = rayBox(o, d, [b.minX, b.minY, b.minZ], [b.maxX, b.maxY, b.maxZ]); if (t !== null && t < dist) dist = t; }
+  if (d[1] < 0) dist = Math.min(dist, -o[1] / d[1]);
+  for (const p of lastView.players.values()) {
+    if (p.id === myId || !p.a) continue;
+    const c = CLASSES[p.k] || CLASSES.sotilas;
+    const t = rayBox(o, d, [p.x - c.radius, p.y, p.z - c.radius], [p.x + c.radius, p.y + c.height, p.z + c.radius]);
+    if (t !== null && t < dist) dist = t;
+  }
+  const muzzleWorld = new THREE.Vector3(0, 0.035, -0.34);
+  viewGun.localToWorld(muzzleWorld);
+  addTracer([muzzleWorld.x, muzzleWorld.y, muzzleWorld.z], o.map((v, i) => v + d[i] * dist));
+
+  recoil = 1;
+  muzzle.visible = true;
+  setTimeout(() => (muzzle.visible = false), 45);
+  sound("shot");
+  if (ammo === 0) setTimeout(() => startReload(false), 120); // automaattinen lataus
+  updateAmmo(now);
+}
+
+// ====== Vahinkonumerot: punainen "-N" nousee osumakohdasta ja häviää ======
+const damageNumbers = [];
+function addDamageNumber(dmg, at) {
+  const el = document.createElement("div");
+  el.className = "dmg";
+  el.textContent = "-" + dmg;
+  document.body.appendChild(el);
+  damageNumbers.push({ el, pos: [at[0] + (Math.random() - 0.5) * 0.4, at[1] + 0.2, at[2] + (Math.random() - 0.5) * 0.4], born: performance.now() });
+}
+const _v = new THREE.Vector3();
+function updateDamageNumbers(now) {
+  for (let i = damageNumbers.length - 1; i >= 0; i--) {
+    const d = damageNumbers[i], age = (now - d.born) / 1000;
+    if (age > 1.1) { d.el.remove(); damageNumbers.splice(i, 1); continue; }
+    _v.set(d.pos[0], d.pos[1] + age * 0.9, d.pos[2]).project(camera); // nousee ylöspäin
+    const visible = _v.z < 1;
+    d.el.style.display = visible ? "block" : "none";
+    d.el.style.left = ((_v.x + 1) / 2) * innerWidth + "px";
+    d.el.style.top = ((1 - _v.y) / 2) * innerHeight + "px";
+    d.el.style.opacity = Math.min(1, 1.6 - age * 1.45);
+    d.el.style.transform = `translate(-50%, -50%) scale(${age < 0.08 ? 1.4 - age * 5 : 1})`;
+  }
+}
+
+let crossTimer = 0;
+function flashCross(kill) {
+  $("cross").classList.add("hit");
+  clearTimeout(crossTimer);
+  crossTimer = setTimeout(() => $("cross").classList.remove("hit"), kill ? 350 : 140);
+}
+
+function addFeed(msg) {
+  const el = document.createElement("div");
+  el.innerHTML = `<span style="color:${msg.kc}">${esc(msg.killer)}</span> ⨯ <span style="color:${msg.vc}">${esc(msg.victim)}</span>`;
+  $("feed").prepend(el, document.createElement("br"));
+  setTimeout(() => { el.nextSibling?.remove(); el.remove(); }, 5000);
+}
+
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(location.href); $("copy").textContent = "Linkki kopioitu!"; }
+  catch { prompt("Kopioi linkki:", location.href); }
+  setTimeout(() => ($("copy").textContent = "Kopioi huoneen linkki"), 1500);
+};
+
+// ====== Muiden pelaajien interpoloitu tila ======
+function lerpAngle(a, b, t) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
+function currentView() {
+  if (snapshots.length === 0) return { players: new Map(), sa: 0, sb: 0, t: 1 };
+  const renderTime = performance.now() - INTERP_DELAY;
+  let i = snapshots.length - 1;
+  while (i > 0 && snapshots[i - 1].time > renderTime) i--;
+  const b = snapshots[i], a = snapshots[i - 1];
+  if (!a || renderTime >= b.time) return { players: b.players, sa: b.seq, sb: b.seq, t: 1 };
+  const t = Math.max(0, Math.min(1, (renderTime - a.time) / (b.time - a.time)));
+  const out = new Map();
+  for (const [id, pb] of b.players) {
+    const pa = a.players.get(id);
+    out.set(id, pa && pa.a === pb.a ? { ...pb, x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t, z: pa.z + (pb.z - pa.z) * t, yw: lerpAngle(pa.yw, pb.yw, t), p: pa.p + (pb.p - pa.p) * t } : pb);
+  }
+  return { players: out, sa: a.seq, sb: b.seq, t };
+}
+
+// ====== Pelisilmukka ======
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000);
+  prev = now;
+  lastView = currentView();
+
+  if (joined) {
+    if (locked() && me.alive) physics(dt);
+    sendMove(now);
+    if (firing && me.alive && locked() && now - lastShot >= WEAPON.cooldownMs) shoot(now);
+    if (!me.alive) $("deadTimer").textContent = `Synnyt uudelleen ${Math.max(0, Math.ceil((respawnAt - now) / 1000))} s kuluttua`;
+  }
+
+  camera.position.set(me.x, me.y + me.cls.height * 0.9, me.z);
+  camera.rotation.set(me.pitch, me.yaw, 0);
+
+  // Aseen rekyyli ja pieni heilunta kävellessä
+  recoil = Math.max(0, recoil - dt * 9);
+  const moving = joined && (keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD) && me.grounded;
+  const bob = moving ? Math.sin(now / 90) * 0.008 : 0;
+  viewGun.position.set(GUN_POS.x, GUN_POS.y + bob + recoil * 0.02, GUN_POS.z + recoil * 0.06);
+  viewGun.rotation.set(recoil * 0.25, 0, 0);
+
+  // Latausanimaatio: ase kallistuu, vasen käsi tuo lippaan ja lyö sen sisään
+  if (joined) updateAmmo(now);
+  viewHand.visible = reloading && me.alive;
+  if (reloading) {
+    const r = Math.min(1, (now - reloadStart) / WEAPON.reloadMs);
+    const tilt = Math.sin(Math.min(1, r * 1.15) * Math.PI);           // ase kallistuu ja palaa
+    viewGun.rotation.set(0.35 * tilt, 0.15 * tilt, 0.55 * tilt);
+    viewGun.position.y -= 0.05 * tilt;
+    // käsi: 0-0.3 tulee esiin, 0.3-0.5 vie lippaan kahvan alle, 0.5-0.6 lyö sisään, 0.6-1 poistuu
+    const k = r < 0.5 ? Math.min(1, r / 0.45) : r < 0.62 ? 1 : Math.max(0, 1 - (r - 0.62) / 0.3);
+    const ease = k * k * (3 - 2 * k);
+    viewHand.position.lerpVectors(HAND_REST, HAND_GUN, ease);
+    if (r > 0.5 && r < 0.6) viewHand.position.y += 0.03 * Math.sin(((r - 0.5) / 0.1) * Math.PI); // napautus ylös
+    viewHand.position.y -= 0.05 * tilt * ease;
+    viewHand.rotation.set(0.2, 0, 0.5 * tilt);
+    viewHand.userData.mag.visible = r < 0.58; // lipas jää aseeseen
+  }
+
+  // Muut pelaajat
+  const view = lastView.players;
+  for (const [id, av] of avatars) {
+    if (!view.has(id) || id === myId) { removeAvatar(av); avatars.delete(id); }
+  }
+  for (const [id, p] of view) {
+    if (id === myId) continue;
+    let av = avatars.get(id);
+    if (av && (av.k !== p.k || av.n !== p.n)) { removeAvatar(av); avatars.delete(id); av = null; }
+    if (!av) { av = makeAvatar(p); avatars.set(id, av); }
+    av.group.position.set(p.x, p.y, p.z);
+    av.group.rotation.y = p.yw;
+    av.label.visible = !!p.a;
+    animateCharacter(av.ch, p.k, { x: p.x, y: p.y, z: p.z, pitch: p.p, alive: !!p.a, reloading: !!p.rl }, dt, now);
+  }
+  updateTracers(now);
+  updateDamageNumbers(now);
+
+  // HUD
+  if (joined) {
+    $("info").textContent = `Huone: ${roomName} · ${me.cls.name} · pelaajia ${view.size}`;
+    const sorted = [...view.values()].sort((a, b) => b.kl - a.kl || a.de - b.de);
+    $("list").innerHTML = sorted.map((p) =>
+      `<div><span style="color:${p.c}">●</span> ${esc(p.n)} <span style="color:#aab">(${esc(CLASSES[p.k]?.name || "")})</span>${p.id === myId ? " · sinä" : ""} <span class="kd">${p.kl} / ${p.de}</span></div>`).join("");
+  } else { $("info").textContent = ""; $("list").innerHTML = ""; }
+
+  renderer.render(scene, camera);
+  if (!joined) previewFrame(dt, now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+updateOverlays();
+
+// Testausta varten: window.areena konsolissa
+window.areena = { me, keys, physics, charSpec, get view() { return lastView; }, get boxes() { return BOXES; } };
+</script>
+</body>
+</html>

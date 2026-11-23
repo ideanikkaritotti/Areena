@@ -1,5 +1,5 @@
 # Areena – 3D-moninpeli selaimessa
-
+https://ideanikkaritotti.github.io/Areena/
 ## Pelin tavoite: jouluruokareseptit
 Pelaajat valitsevat huoneeseen tullessaan puolen: **sininen** tai **punainen** ovi (vieressä pelaajamäärät). Sininen base on areenan pohjoispäässä ja punainen eteläpäässä.
 - Keskitornin katolle ilmestyy **jouluruokaresepti** minuutin kuluttua kierroksen alusta. Uusi resepti ilmestyy vasta, kun edellinen on haettu katolta, ja silloinkin vasta 3 minuutin kuluttua noudosta.
